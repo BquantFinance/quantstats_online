@@ -2,3 +2,4 @@ quantstats
 pandas
 streamlit
 plotly
+IPython
