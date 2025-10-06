@@ -7,6 +7,7 @@ import base64
 from datetime import datetime
 import plotly.graph_objects as go
 import yfinance as yf
+import matplotlib.pyplot as plt
 
 # Page config
 st.set_page_config(
@@ -215,6 +216,46 @@ def get_insight(metric_name, value):
             return f"<div class='warning-box'><b>⚠️ Insight:</b> {thresholds['bad'][1]}</div>"
     return ""
 
+# Helper functions for missing quantstats functions
+def calculate_beta(returns, benchmark):
+    """Calculate beta manually"""
+    # Align dates
+    common_dates = returns.index.intersection(benchmark.index)
+    if len(common_dates) == 0:
+        return 0
+    
+    aligned_returns = returns.loc[common_dates]
+    aligned_benchmark = benchmark.loc[common_dates]
+    
+    # Calculate covariance and variance
+    covariance = np.cov(aligned_returns, aligned_benchmark)[0][1]
+    benchmark_variance = np.var(aligned_benchmark)
+    
+    if benchmark_variance == 0:
+        return 0
+    
+    return covariance / benchmark_variance
+
+def calculate_alpha(returns, benchmark, rf=0, periods=252):
+    """Calculate alpha manually"""
+    common_dates = returns.index.intersection(benchmark.index)
+    if len(common_dates) == 0:
+        return 0
+    
+    aligned_returns = returns.loc[common_dates]
+    aligned_benchmark = benchmark.loc[common_dates]
+    
+    beta = calculate_beta(aligned_returns, aligned_benchmark)
+    
+    # Annualize returns
+    strategy_return = (1 + aligned_returns).prod() ** (periods / len(aligned_returns)) - 1
+    benchmark_return = (1 + aligned_benchmark).prod() ** (periods / len(aligned_benchmark)) - 1
+    
+    # Alpha = Strategy Return - (Rf + Beta * (Benchmark Return - Rf))
+    alpha = strategy_return - (rf + beta * (benchmark_return - rf))
+    
+    return alpha
+
 # Title
 st.markdown("<h1 style='text-align: center; margin-bottom: 0; font-size: 48px;'>📊 QuantStats Pro Analytics</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00d4ff; font-size: 18px; margin-top: 5px;'>Análisis Cuantitativo Profesional de Estrategias</p>", unsafe_allow_html=True)
@@ -251,13 +292,7 @@ with st.sidebar:
                 help="Datos descargados automáticamente de Yahoo Finance"
             )
             
-            col_a, col_b = st.columns(2)
-            with col_a:
-                start_date = st.date_input("Fecha Inicio", value=None, help="Dejar vacío para usar rango completo")
-            with col_b:
-                end_date = st.date_input("Fecha Fin", value=None, help="Dejar vacío para usar rango completo")
-            
-            st.info(f"📊 Se descargará: **{benchmark_option}** desde Yahoo Finance")
+            st.info(f"📊 Se descargará: **{benchmark_option}** (ajustado al rango de tu estrategia)")
         
         elif benchmark_type == "CSV Personalizado":
             benchmark_file = st.file_uploader(
@@ -517,10 +552,17 @@ else:
             
             with st.spinner(f"📥 Descargando {bench_name} desde Yahoo Finance..."):
                 try:
-                    if start_date and end_date:
-                        bench_data = yf.download(benchmark_option, start=start_date, end=end_date, progress=False, auto_adjust=True)
-                    else:
-                        bench_data = yf.download(benchmark_option, start=returns.index.min(), end=returns.index.max(), progress=False, auto_adjust=True)
+                    # Always use strategy date range
+                    start = returns.index.min()
+                    end = returns.index.max()
+                    
+                    bench_data = yf.download(
+                        benchmark_option, 
+                        start=start, 
+                        end=end, 
+                        progress=False, 
+                        auto_adjust=True
+                    )
                     
                     if not bench_data.empty and len(bench_data) > 0:
                         if 'Close' in bench_data.columns:
@@ -689,6 +731,8 @@ else:
             
             if prefs['show_insights']:
                 st.markdown(get_insight('max_dd', max_dd*100), unsafe_allow_html=True)
+                if avg_dd_days > 90:
+                    st.markdown(f"<div class='warning-box'><b>⚠️ Drawdowns Prolongados:</b> Tiempo promedio de recuperación de {avg_dd_days:.0f} días. Considera estrategias para reducir duración.</div>", unsafe_allow_html=True)
         
         # === RETURNS ANALYSIS ===
         if prefs['metrics']['returns']:
@@ -718,8 +762,8 @@ else:
             
             bench_return = qs.stats.comp(benchmark)
             bench_sharpe = qs.stats.sharpe(benchmark, rf=rf_rate, periods=periods_per_year)
-            beta = qs.stats.beta(returns, benchmark)
-            alpha = qs.stats.alpha(returns, benchmark, rf=rf_rate, periods=periods_per_year)
+            beta = calculate_beta(returns, benchmark)
+            alpha = calculate_alpha(returns, benchmark, rf=rf_rate, periods=periods_per_year)
             
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -732,6 +776,15 @@ else:
                 st.metric("Beta", f"{beta:.2f}")
             with col4:
                 st.metric("Alpha (Anual)", f"{alpha*100:.2f}%")
+            
+            if prefs['show_insights']:
+                if abs(beta) < 0.5:
+                    st.markdown("<div class='insight-box'><b>💡 Baja Correlación:</b> Tu estrategia muestra independencia del benchmark. Excelente diversificación.</div>", unsafe_allow_html=True)
+                elif beta > 1.3:
+                    st.markdown("<div class='warning-box'><b>⚠️ Alto Beta:</b> La estrategia amplifica los movimientos del mercado. Mayor riesgo y potencial retorno.</div>", unsafe_allow_html=True)
+                
+                if alpha > 0.05:
+                    st.markdown("<div class='insight-box'><b>🌟 Alpha Positivo:</b> Tu estrategia genera valor por encima del benchmark ajustado por riesgo.</div>", unsafe_allow_html=True)
         
         st.markdown("---")
         
@@ -740,8 +793,30 @@ else:
         
         if prefs['charts']['cumulative_returns']:
             with st.expander("📈 Retornos Acumulados", expanded=True):
-                fig = qs.plots.returns(returns, benchmark=benchmark, show=False, figsize=(14, 6))
-                st.pyplot(fig)
+                try:
+                    fig = qs.plots.returns(returns, benchmark=benchmark, show=False, figsize=(14, 6))
+                    st.pyplot(fig, clear_figure=True)
+                    plt.close()
+                except Exception as e:
+                    st.error(f"Error al generar gráfico de retornos acumulados: {str(e)}")
+                    # Fallback: simple cumulative plot
+                    cum_returns = (1 + returns).cumprod()
+                    fig, ax = plt.subplots(figsize=(14, 6))
+                    ax.plot(cum_returns.index, cum_returns.values, linewidth=2, color='#00d4ff', label='Estrategia')
+                    if benchmark is not None:
+                        cum_bench = (1 + benchmark).cumprod()
+                        ax.plot(cum_bench.index, cum_bench.values, linewidth=2, color='#ff9900', label=bench_name, alpha=0.7)
+                    ax.set_title('Retornos Acumulados', fontsize=14, color='white')
+                    ax.set_xlabel('Fecha', fontsize=12, color='white')
+                    ax.set_ylabel('Valor', fontsize=12, color='white')
+                    ax.legend()
+                    ax.grid(True, alpha=0.2)
+                    ax.set_facecolor('#0f1419')
+                    fig.patch.set_facecolor('#0f1419')
+                    ax.tick_params(colors='white')
+                    plt.tight_layout()
+                    st.pyplot(fig, clear_figure=True)
+                    plt.close()
         
         charts_to_show = []
         
@@ -773,27 +848,61 @@ else:
                     chart_type, chart_title = charts_to_show[i + j]
                     with cols[j]:
                         with st.expander(chart_title, expanded=False):
-                            if chart_type == 'monthly_heatmap':
-                                fig = qs.plots.monthly_heatmap(returns, show=False, figsize=(10, 7))
-                            elif chart_type == 'distribution':
-                                fig = qs.plots.histogram(returns, show=False, figsize=(10, 6))
-                            elif chart_type == 'drawdown':
-                                fig = qs.plots.drawdowns_periods(returns, show=False, figsize=(10, 6))
-                            elif chart_type == 'yearly_returns':
-                                fig = qs.plots.yearly_returns(returns, benchmark=benchmark, show=False, figsize=(10, 6))
-                            elif chart_type == 'qq_plot':
-                                fig = qs.plots.qq(returns, show=False, figsize=(10, 6))
-                            elif chart_type == 'log_returns':
-                                fig = qs.plots.log_returns(returns, show=False, figsize=(10, 6))
-                            elif chart_type == 'rolling_vol':
-                                fig = qs.plots.rolling_volatility(returns, period=periods_per_year, show=False, figsize=(10, 6))
-                            elif chart_type == 'rolling_sharpe':
-                                fig = qs.plots.rolling_sharpe(returns, rf=rf_rate, period=periods_per_year, show=False, figsize=(10, 6))
-                            elif chart_type == 'rolling_beta':
-                                fig = qs.plots.rolling_beta(returns, benchmark, show=False, figsize=(10, 6))
-                            elif chart_type == 'rolling_stats':
-                                fig = qs.plots.rolling_stats(returns, show=False, figsize=(10, 6))
-                            st.pyplot(fig)
+                            try:
+                                if chart_type == 'monthly_heatmap':
+                                    fig = qs.plots.monthly_heatmap(returns, show=False, figsize=(10, 7))
+                                    st.pyplot(fig, clear_figure=True)
+                                elif chart_type == 'distribution':
+                                    fig = qs.plots.histogram(returns, show=False, figsize=(10, 6))
+                                    st.pyplot(fig, clear_figure=True)
+                                elif chart_type == 'drawdown':
+                                    fig = qs.plots.drawdowns_periods(returns, show=False, figsize=(10, 6))
+                                    st.pyplot(fig, clear_figure=True)
+                                elif chart_type == 'yearly_returns':
+                                    fig = qs.plots.yearly_returns(returns, benchmark=benchmark, show=False, figsize=(10, 6))
+                                    st.pyplot(fig, clear_figure=True)
+                                elif chart_type == 'qq_plot':
+                                    fig = qs.plots.qq(returns, show=False, figsize=(10, 6))
+                                    st.pyplot(fig, clear_figure=True)
+                                elif chart_type == 'log_returns':
+                                    fig = qs.plots.log_returns(returns, show=False, figsize=(10, 6))
+                                    st.pyplot(fig, clear_figure=True)
+                                elif chart_type == 'rolling_vol':
+                                    fig = qs.plots.rolling_volatility(returns, period=periods_per_year, show=False, figsize=(10, 6))
+                                    st.pyplot(fig, clear_figure=True)
+                                elif chart_type == 'rolling_sharpe':
+                                    fig = qs.plots.rolling_sharpe(returns, rf=rf_rate, period=periods_per_year, show=False, figsize=(10, 6))
+                                    st.pyplot(fig, clear_figure=True)
+                                elif chart_type == 'rolling_beta':
+                                    # Calculate rolling beta manually
+                                    window = min(60, len(returns) // 4)
+                                    common_dates = returns.index.intersection(benchmark.index)
+                                    aligned_returns = returns.loc[common_dates]
+                                    aligned_benchmark = benchmark.loc[common_dates]
+                                    
+                                    rolling_beta = aligned_returns.rolling(window).cov(aligned_benchmark) / aligned_benchmark.rolling(window).var()
+                                    
+                                    fig, ax = plt.subplots(figsize=(10, 6))
+                                    ax.plot(rolling_beta.index, rolling_beta.values, linewidth=2, color='#00d4ff')
+                                    ax.axhline(y=1, color='#ff9900', linestyle='--', alpha=0.5, label='Beta = 1')
+                                    ax.set_title('Rolling Beta', fontsize=14, color='white')
+                                    ax.set_xlabel('Fecha', fontsize=12, color='white')
+                                    ax.set_ylabel('Beta', fontsize=12, color='white')
+                                    ax.grid(True, alpha=0.2)
+                                    ax.legend()
+                                    ax.set_facecolor('#0f1419')
+                                    fig.patch.set_facecolor('#0f1419')
+                                    ax.tick_params(colors='white')
+                                    plt.tight_layout()
+                                    st.pyplot(fig, clear_figure=True)
+                                elif chart_type == 'rolling_stats':
+                                    fig = qs.plots.rolling_stats(returns, show=False, figsize=(10, 6))
+                                    st.pyplot(fig, clear_figure=True)
+                                
+                                plt.close('all')
+                            except Exception as e:
+                                st.warning(f"No se pudo generar el gráfico: {chart_title}")
+                                st.caption(f"Error: {str(e)}")
         
         # === ADVANCED FEATURES ===
         if any(prefs['advanced'].values()):
@@ -861,7 +970,8 @@ else:
                 
                 st.markdown("#### 📊 Distribución de Retornos Mensuales")
                 fig = qs.plots.monthly_returns(returns, show=False, figsize=(14, 6))
-                st.pyplot(fig)
+                st.pyplot(fig, clear_figure=True)
+                plt.close()
         
         if prefs['advanced']['monte_carlo']:
             with st.expander("🎲 Simulación Monte Carlo", expanded=False):
@@ -954,7 +1064,8 @@ else:
             if st.button("📸 Tearsheet", use_container_width=True):
                 with st.spinner("Creando tearsheet..."):
                     fig = qs.plots.snapshot(returns, show=False, figsize=(14, 10))
-                    st.pyplot(fig)
+                    st.pyplot(fig, clear_figure=True)
+                    plt.close()
     
     except Exception as e:
         st.error(f"❌ Error al procesar los datos")
@@ -984,9 +1095,12 @@ st.markdown("""
         <p style='color: #a0a0c0; font-size: 14px; margin-bottom: 15px;'>
             Análisis Cuantitativo de Nivel Institucional
         </p>
-        <p style='color: #00ff88; font-size: 16px; font-weight: 600; margin: 0;'>
+        <p style='color: #00ff88; font-size: 16px; font-weight: 600; margin: 10px 0;'>
             Hecho por <a href='https://twitter.com/Gsnchez' class='footer-link' target='_blank'>@Gsnchez</a> | 
             <a href='https://bquantfinance.com' class='footer-link' target='_blank'>bquantfinance.com</a>
+        </p>
+        <p style='color: #666; font-size: 11px; margin-top: 15px;'>
+            Powered by QuantStats • Algunas métricas calculadas manualmente para compatibilidad
         </p>
     </div>
 """, unsafe_allow_html=True)
