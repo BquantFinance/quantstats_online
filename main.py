@@ -27,7 +27,7 @@ warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
 
 # Page config
 st.set_page_config(
-    page_title="QuantStats Pro Analytics",
+    page_title="BQuantStats Pro Analytics",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -187,7 +187,6 @@ if 'preferences' not in st.session_state:
             'monthly_heatmap': True,
             'distribution': True,
             'drawdown': True,
-            'rolling_stats': True,
             'yearly_returns': True,
             'qq_plot': False,
             'log_returns': False,
@@ -268,7 +267,7 @@ def calculate_alpha(returns, benchmark, rf=0, periods=252):
     return alpha
 
 # Title
-st.markdown("<h1 style='text-align: center; margin-bottom: 0; font-size: 48px;'>📊 QuantStats Pro Analytics</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; margin-bottom: 0; font-size: 48px;'>📊 BQuantStats Pro Analytics</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00d4ff; font-size: 18px; margin-top: 5px;'>Análisis Cuantitativo Profesional de Estrategias</p>", unsafe_allow_html=True)
 st.markdown("---")
 
@@ -364,10 +363,6 @@ with st.sidebar:
                 "Gráfico de Drawdown", 
                 value=st.session_state.preferences['charts']['drawdown']
             )
-            st.session_state.preferences['charts']['rolling_stats'] = st.checkbox(
-                "Estadísticas Móviles", 
-                value=st.session_state.preferences['charts']['rolling_stats']
-            )
             st.session_state.preferences['charts']['yearly_returns'] = st.checkbox(
                 "Retornos Anuales", 
                 value=st.session_state.preferences['charts']['yearly_returns']
@@ -421,7 +416,8 @@ with st.sidebar:
         col1, col2 = st.columns(2)
         with col1:
             if st.button("📊 Esencial", use_container_width=True):
-                st.session_state.preferences['charts'] = {k: k in ['cumulative_returns', 'monthly_heatmap', 'drawdown', 'distribution'] for k in st.session_state.preferences['charts']}
+                essential_charts = ['cumulative_returns', 'monthly_heatmap', 'drawdown', 'distribution']
+                st.session_state.preferences['charts'] = {k: k in essential_charts for k in st.session_state.preferences['charts']}
                 st.rerun()
         with col2:
             if st.button("🔬 Completo", use_container_width=True):
@@ -438,7 +434,7 @@ if uploaded_file is None:
     with col2:
         st.markdown("""
             <div style='text-align: center; padding: 60px 30px; background: linear-gradient(135deg, rgba(0, 212, 255, 0.05) 0%, rgba(0, 153, 204, 0.05) 100%); border-radius: 20px; margin-top: 30px; border: 1px solid rgba(0, 212, 255, 0.2);'>
-                <h2 style='color: #00d4ff; margin-bottom: 25px; font-size: 36px;'>Bienvenido a Pro Analytics</h2>
+                <h2 style='color: #00d4ff; margin-bottom: 25px; font-size: 36px;'>Bienvenido a BQuant Analytics</h2>
                 <p style='color: #a0a0c0; font-size: 18px; line-height: 1.8; margin-bottom: 30px;'>
                     Plataforma profesional de análisis cuantitativo completamente personalizable
                 </p>
@@ -520,7 +516,7 @@ if uploaded_file is None:
                     👈 Comienza subiendo tu archivo CSV en el panel lateral
                 </p>
                 <p style='color: #a0a0c0; font-size: 13px; margin: 5px 0 0 0;'>
-                    📦 Requiere: <code>streamlit quantstats yfinance pandas numpy plotly openpyxl</code>
+                    📦 Requiere: <code>streamlit quantstats yfinance pandas numpy plotly matplotlib openpyxl</code>
                 </p>
             </div>
         """, unsafe_allow_html=True)
@@ -847,8 +843,6 @@ else:
             charts_to_show.append(('rolling_sharpe', "📈 Sharpe Móvil"))
         if prefs['charts']['rolling_beta'] and benchmark is not None:
             charts_to_show.append(('rolling_beta', "🎯 Beta Móvil"))
-        if prefs['charts']['rolling_stats']:
-            charts_to_show.append(('rolling_stats', "📊 Estadísticas Móviles"))
         
         for i in range(0, len(charts_to_show), 2):
             cols = st.columns(2)
@@ -902,9 +896,6 @@ else:
                                     fig.patch.set_facecolor('#0f1419')
                                     ax.tick_params(colors='white')
                                     plt.tight_layout()
-                                    st.pyplot(fig, clear_figure=True)
-                                elif chart_type == 'rolling_stats':
-                                    fig = qs.plots.rolling_stats(returns, show=False, figsize=(10, 6))
                                     st.pyplot(fig, clear_figure=True)
                                 
                                 plt.close('all')
@@ -1111,7 +1102,7 @@ st.markdown("---")
 st.markdown("""
     <div class='footer'>
         <p style='color: #00d4ff; font-size: 18px; font-weight: 700; margin-bottom: 10px;'>
-            📊 QuantStats Pro Analytics
+            📊 BQuantStats Pro Analytics
         </p>
         <p style='color: #a0a0c0; font-size: 14px; margin-bottom: 15px;'>
             Análisis Cuantitativo de Nivel Institucional
