@@ -3,3 +3,4 @@ pandas
 streamlit
 plotly
 IPython
+yfinance
