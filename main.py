@@ -27,7 +27,7 @@ warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
 
 # Page config
 st.set_page_config(
-    page_title="BQuantStats Pro Analytics",
+    page_title="QuantStats Pro Analytics",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -268,7 +268,7 @@ def calculate_alpha(returns, benchmark, rf=0, periods=252):
     return alpha
 
 # Title
-st.markdown("<h1 style='text-align: center; margin-bottom: 0; font-size: 48px;'>📊 BQuantStats Pro Analytics</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; margin-bottom: 0; font-size: 48px;'>📊 QuantStats Pro Analytics</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00d4ff; font-size: 18px; margin-top: 5px;'>Análisis Cuantitativo Profesional de Estrategias</p>", unsafe_allow_html=True)
 st.markdown("---")
 
@@ -1121,7 +1121,7 @@ st.markdown("""
             <a href='https://bquantfinance.com' class='footer-link' target='_blank'>bquantfinance.com</a>
         </p>
         <p style='color: #666; font-size: 11px; margin-top: 15px;'>
-            Powered by BQuantStats • Métricas calculadas con precisión institucional
+            Powered by QuantStats • Métricas calculadas con precisión institucional
         </p>
     </div>
 """, unsafe_allow_html=True)
