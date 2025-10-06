@@ -434,7 +434,7 @@ if uploaded_file is None:
     with col2:
         st.markdown("""
             <div style='text-align: center; padding: 60px 30px; background: linear-gradient(135deg, rgba(0, 212, 255, 0.05) 0%, rgba(0, 153, 204, 0.05) 100%); border-radius: 20px; margin-top: 30px; border: 1px solid rgba(0, 212, 255, 0.2);'>
-                <h2 style='color: #00d4ff; margin-bottom: 25px; font-size: 36px;'>Bienvenido a BQuant Analytics</h2>
+                <h2 style='color: #00d4ff; margin-bottom: 25px; font-size: 36px;'>Bienvenido a BQuantStats</h2>
                 <p style='color: #a0a0c0; font-size: 18px; line-height: 1.8; margin-bottom: 30px;'>
                     Plataforma profesional de análisis cuantitativo completamente personalizable
                 </p>
