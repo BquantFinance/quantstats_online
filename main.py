@@ -532,16 +532,27 @@ else:
                 try:
                     # Download benchmark data
                     if start_date and end_date:
-                        bench_data = yf.download(benchmark_option, start=start_date, end=end_date, progress=False)
+                        bench_data = yf.download(benchmark_option, start=start_date, end=end_date, progress=False, auto_adjust=True)
                     else:
                         # Use strategy date range
-                        bench_data = yf.download(benchmark_option, start=returns.index.min(), end=returns.index.max(), progress=False)
+                        bench_data = yf.download(benchmark_option, start=returns.index.min(), end=returns.index.max(), progress=False, auto_adjust=True)
                     
-                    if not bench_data.empty:
-                        # Calculate returns from adjusted close
-                        benchmark = bench_data['Adj Close'].pct_change().dropna()
+                    if not bench_data.empty and len(bench_data) > 0:
+                        # Calculate returns - yfinance with auto_adjust=True returns Close as adjusted
+                        if 'Close' in bench_data.columns:
+                            benchmark = bench_data['Close'].pct_change().dropna()
+                        else:
+                            # Fallback if structure is different
+                            benchmark = bench_data.iloc[:, 0].pct_change().dropna()
+                        
+                        # Ensure benchmark is a Series
+                        if isinstance(benchmark, pd.DataFrame):
+                            benchmark = benchmark.iloc[:, 0]
                         
                         # Show benchmark info
+                        col_info1, col_info2, col_info3 = st.columns(3)
+                        with col_info1:
+                            # Show benchmark info
                         col_info1, col_info2, col_info3 = st.columns(3)
                         with col_info1:
                             st.success(f"✅ {bench_name} descargado")
@@ -555,14 +566,26 @@ else:
                         with st.expander("📊 Vista Previa del Benchmark", expanded=False):
                             preview_df = pd.DataFrame({
                                 'Fecha': benchmark.index[-10:],
-                                'Retorno': benchmark.values[-10:]
+                                'Retorno': [f"{r*100:.4f}%" for r in benchmark.values[-10:]]
                             })
                             st.dataframe(preview_df, use_container_width=True, hide_index=True)
+                        
+                        st.info(f"💡 Alineando fechas con tu estrategia para comparación precisa")
                     else:
                         st.error(f"❌ No se pudieron obtener datos de {bench_name}")
+                        benchmark = None
                 except Exception as e:
-                    st.error(f"❌ Error al descargar {bench_name}: {str(e)}")
-                    st.info("💡 Verifica que el símbolo sea correcto y que Yahoo Finance tenga datos disponibles")
+                    st.error(f"❌ Error al descargar {bench_name}")
+                    with st.expander("🔍 Detalles del error"):
+                        st.code(str(e))
+                        st.info("💡 Consejos:")
+                        st.markdown("""
+                        - Verifica que el símbolo sea correcto (ej: SPY, QQQ, ^GSPC)
+                        - Algunos símbolos requieren formato especial (ej: BTC-USD para Bitcoin)
+                        - Yahoo Finance puede tener datos limitados para ciertos activos
+                        - Intenta con un rango de fechas diferente
+                        """)
+                    benchmark = None
         
         elif benchmark_type == "CSV Personalizado" and benchmark_file:
             try:
@@ -660,9 +683,29 @@ else:
             st.markdown("<div class='section-header'><h3 style='margin:0;'>📉 Métricas de Drawdown</h3></div>", unsafe_allow_html=True)
             
             max_dd = qs.stats.max_drawdown(returns)
-            avg_dd = qs.stats.avg_drawdown(returns)
-            avg_dd_days = qs.stats.avg_drawdown_days(returns)
             calmar = qs.stats.calmar(returns, periods=periods_per_year)
+            
+            # Calculate average drawdown manually
+            cumulative = (1 + returns).cumprod()
+            running_max = cumulative.cummax()
+            drawdown = (cumulative - running_max) / running_max
+            
+            # Get all drawdown periods
+            is_drawdown = drawdown < 0
+            dd_periods = []
+            if is_drawdown.any():
+                dd_start = None
+                for i, (date, is_dd) in enumerate(is_drawdown.items()):
+                    if is_dd and dd_start is None:
+                        dd_start = i
+                    elif not is_dd and dd_start is not None:
+                        dd_periods.append(drawdown.iloc[dd_start:i])
+                        dd_start = None
+                if dd_start is not None:
+                    dd_periods.append(drawdown.iloc[dd_start:])
+            
+            avg_dd = np.mean([dd.min() for dd in dd_periods]) if dd_periods else 0
+            avg_dd_days = np.mean([len(dd) for dd in dd_periods]) if dd_periods else 0
             
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -836,6 +879,7 @@ else:
                 with col4:
                     st.metric("Peor Mes", f"{monthly_rets.min()*100:.2f}%")
                 
+                st.markdown("#### 📊 Distribución de Retornos Mensuales")
                 fig = qs.plots.monthly_returns(returns, show=False, figsize=(14, 6))
                 st.pyplot(fig)
         
