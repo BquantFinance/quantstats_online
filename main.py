@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 # Page config
 st.set_page_config(
-    page_title="QuantStats Pro Analytics",
+    page_title="BQuantStats Pro Analytics",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -257,7 +257,7 @@ def calculate_alpha(returns, benchmark, rf=0, periods=252):
     return alpha
 
 # Title
-st.markdown("<h1 style='text-align: center; margin-bottom: 0; font-size: 48px;'>📊 QuantStats Pro Analytics</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; margin-bottom: 0; font-size: 48px;'>📊 BQuantStats Pro Analytics</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00d4ff; font-size: 18px; margin-top: 5px;'>Análisis Cuantitativo Profesional de Estrategias</p>", unsafe_allow_html=True)
 st.markdown("---")
 
