@@ -7,7 +7,23 @@ import base64
 from datetime import datetime
 import plotly.graph_objects as go
 import yfinance as yf
+import tempfile
+import os
+
+# Matplotlib configuration
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
+# Configure matplotlib to use default fonts and suppress warnings
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 
+                                     'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Helvetica', 
+                                     'Avant Garde', 'sans-serif']
+
+import warnings
+warnings.filterwarnings('ignore')
+warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
 
 # Page config
 st.set_page_config(
@@ -186,7 +202,7 @@ if 'preferences' not in st.session_state:
         }
     }
 
-# Helper function
+# Helper functions
 def get_insight(metric_name, value):
     insights = {
         'sharpe': {
@@ -216,10 +232,8 @@ def get_insight(metric_name, value):
             return f"<div class='warning-box'><b>⚠️ Insight:</b> {thresholds['bad'][1]}</div>"
     return ""
 
-# Helper functions for missing quantstats functions
 def calculate_beta(returns, benchmark):
     """Calculate beta manually"""
-    # Align dates
     common_dates = returns.index.intersection(benchmark.index)
     if len(common_dates) == 0:
         return 0
@@ -227,7 +241,6 @@ def calculate_beta(returns, benchmark):
     aligned_returns = returns.loc[common_dates]
     aligned_benchmark = benchmark.loc[common_dates]
     
-    # Calculate covariance and variance
     covariance = np.cov(aligned_returns, aligned_benchmark)[0][1]
     benchmark_variance = np.var(aligned_benchmark)
     
@@ -247,11 +260,9 @@ def calculate_alpha(returns, benchmark, rf=0, periods=252):
     
     beta = calculate_beta(aligned_returns, aligned_benchmark)
     
-    # Annualize returns
     strategy_return = (1 + aligned_returns).prod() ** (periods / len(aligned_returns)) - 1
     benchmark_return = (1 + aligned_benchmark).prod() ** (periods / len(aligned_benchmark)) - 1
     
-    # Alpha = Strategy Return - (Rf + Beta * (Benchmark Return - Rf))
     alpha = strategy_return - (rf + beta * (benchmark_return - rf))
     
     return alpha
@@ -281,7 +292,6 @@ with st.sidebar:
         )
         
         benchmark_option = None
-        custom_benchmark = None
         benchmark_file = None
         
         if benchmark_type == "Predefinido (yfinance)":
@@ -442,8 +452,8 @@ if uploaded_file is None:
             <div class='guide-box'>
                 <p style='margin: 0 0 15px 0;'><span class='step-number'>1</span><b>Prepara tus datos:</b> Archivo CSV/Excel con dos columnas: fecha y retornos (en decimal 0.01 o porcentaje 1.0)</p>
                 <p style='margin: 0 0 15px 0;'><span class='step-number'>2</span><b>Sube el archivo:</b> Usa el panel lateral izquierdo para cargar tu CSV de estrategia</p>
-                <p style='margin: 0 0 15px 0;'><span class='step-number'>3</span><b>Configura benchmark:</b> Elige descargar desde Yahoo Finance o sube tu propio benchmark</p>
-                <p style='margin: 0 0 15px 0;'><span class='step-number'>4</span><b>Personaliza vista:</b> Selecciona qué métricas y gráficos mostrar</p>
+                <p style='margin: 0 0 15px 0;'><span class='step-number'>3</span><b>Configura benchmark:</b> Elige ticker de Yahoo Finance (se ajustará automáticamente a tu rango de fechas)</p>
+                <p style='margin: 0 0 15px 0;'><span class='step-number'>4</span><b>Personaliza vista:</b> Selecciona qué métricas y gráficos mostrar en el sidebar</p>
                 <p style='margin: 0;'><span class='step-number'>5</span><b>Analiza y exporta:</b> Explora resultados y descarga reportes profesionales</p>
             </div>
         """, unsafe_allow_html=True)
@@ -492,12 +502,12 @@ if uploaded_file is None:
             
             st.markdown("""
                 <div class='metric-card'>
-                    <h4 style='color: #00d4ff; margin-top: 0;'>🎯 Benchmarks Flexibles</h4>
+                    <h4 style='color: #00d4ff; margin-top: 0;'>🎯 Benchmarks Inteligentes</h4>
                     <ul style='color: #a0a0c0; line-height: 1.8;'>
                         <li>Yahoo Finance (SPY, QQQ, etc.)</li>
+                        <li>Ajuste automático de fechas</li>
                         <li>Subir benchmark personalizado</li>
-                        <li>Control de rango de fechas</li>
-                        <li>Comparación detallada</li>
+                        <li>Comparación detallada (Alpha, Beta)</li>
                     </ul>
                 </div>
             """, unsafe_allow_html=True)
@@ -510,7 +520,7 @@ if uploaded_file is None:
                     👈 Comienza subiendo tu archivo CSV en el panel lateral
                 </p>
                 <p style='color: #a0a0c0; font-size: 13px; margin: 5px 0 0 0;'>
-                    📦 Requiere: <code>streamlit quantstats yfinance pandas numpy plotly</code>
+                    📦 Requiere: <code>streamlit quantstats yfinance pandas numpy plotly openpyxl</code>
                 </p>
             </div>
         """, unsafe_allow_html=True)
@@ -552,7 +562,6 @@ else:
             
             with st.spinner(f"📥 Descargando {bench_name} desde Yahoo Finance..."):
                 try:
-                    # Always use strategy date range
                     start = returns.index.min()
                     end = returns.index.max()
                     
@@ -577,10 +586,12 @@ else:
                         with col_info1:
                             st.success(f"✅ {bench_name} descargado")
                         with col_info2:
-                            st.info(f"📅 {len(benchmark)} observaciones")
+                            st.info(f"📅 {len(benchmark)} días")
                         with col_info3:
                             bench_return = (1 + benchmark).prod() - 1
                             st.info(f"📈 Retorno: {bench_return*100:.2f}%")
+                        
+                        st.caption(f"📆 Rango: {start.strftime('%Y-%m-%d')} a {end.strftime('%Y-%m-%d')}")
                         
                         with st.expander("📊 Vista Previa del Benchmark", expanded=False):
                             preview_df = pd.DataFrame({
@@ -798,8 +809,6 @@ else:
                     st.pyplot(fig, clear_figure=True)
                     plt.close()
                 except Exception as e:
-                    st.error(f"Error al generar gráfico de retornos acumulados: {str(e)}")
-                    # Fallback: simple cumulative plot
                     cum_returns = (1 + returns).cumprod()
                     fig, ax = plt.subplots(figsize=(14, 6))
                     ax.plot(cum_returns.index, cum_returns.values, linewidth=2, color='#00d4ff', label='Estrategia')
@@ -874,7 +883,6 @@ else:
                                     fig = qs.plots.rolling_sharpe(returns, rf=rf_rate, period=periods_per_year, show=False, figsize=(10, 6))
                                     st.pyplot(fig, clear_figure=True)
                                 elif chart_type == 'rolling_beta':
-                                    # Calculate rolling beta manually
                                     window = min(60, len(returns) // 4)
                                     common_dates = returns.index.intersection(benchmark.index)
                                     aligned_returns = returns.loc[common_dates]
@@ -901,7 +909,7 @@ else:
                                 
                                 plt.close('all')
                             except Exception as e:
-                                st.warning(f"No se pudo generar el gráfico: {chart_title}")
+                                st.warning(f"No se pudo generar: {chart_title}")
                                 st.caption(f"Error: {str(e)}")
         
         # === ADVANCED FEATURES ===
@@ -1026,6 +1034,8 @@ else:
                             st.metric("Percentil 95", f"{np.percentile(final_values, 95):.2f}x")
                         with col4:
                             st.metric("Percentil 5", f"{np.percentile(final_values, 5):.2f}x")
+                        
+                        plt.close('all')
         
         # === REPORTS ===
         st.markdown("---")
@@ -1049,16 +1059,27 @@ else:
         with col2:
             if st.button("📄 Reporte HTML", use_container_width=True):
                 with st.spinner("Generando reporte completo..."):
-                    output = io.BytesIO()
-                    if benchmark is not None:
-                        qs.reports.html(returns, benchmark=benchmark, rf=rf_rate, output=output)
-                    else:
-                        qs.reports.html(returns, output=output, rf=rf_rate)
-                    
-                    output.seek(0)
-                    b64 = base64.b64encode(output.read()).decode()
-                    href = f'<a href="data:text/html;base64,{b64}" download="reporte_{datetime.now().strftime("%Y%m%d")}.html"><button style="padding: 12px 30px; background: linear-gradient(90deg, #00ff88 0%, #00d4ff 100%); color: white; border: none; border-radius: 10px; font-weight: 600;">📥 Descargar Reporte</button></a>'
-                    st.markdown(href, unsafe_allow_html=True)
+                    try:
+                        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.html') as tmp_file:
+                            tmp_path = tmp_file.name
+                        
+                        if benchmark is not None:
+                            qs.reports.html(returns, benchmark=benchmark, rf=rf_rate, output=tmp_path)
+                        else:
+                            qs.reports.html(returns, output=tmp_path, rf=rf_rate)
+                        
+                        with open(tmp_path, 'rb') as f:
+                            html_data = f.read()
+                        
+                        os.unlink(tmp_path)
+                        
+                        b64 = base64.b64encode(html_data).decode()
+                        href = f'<a href="data:text/html;base64,{b64}" download="reporte_{datetime.now().strftime("%Y%m%d")}.html"><button style="padding: 12px 30px; background: linear-gradient(90deg, #00ff88 0%, #00d4ff 100%); color: white; border: none; border-radius: 10px; font-weight: 600;">📥 Descargar Reporte</button></a>'
+                        st.markdown(href, unsafe_allow_html=True)
+                        st.success("✅ Reporte generado correctamente!")
+                    except Exception as e:
+                        st.error(f"Error al generar reporte HTML: {str(e)}")
+                        st.info("💡 Intenta descargar la tabla de métricas en CSV como alternativa")
         
         with col3:
             if st.button("📸 Tearsheet", use_container_width=True):
@@ -1100,7 +1121,7 @@ st.markdown("""
             <a href='https://bquantfinance.com' class='footer-link' target='_blank'>bquantfinance.com</a>
         </p>
         <p style='color: #666; font-size: 11px; margin-top: 15px;'>
-            Powered by QuantStats • Algunas métricas calculadas manualmente para compatibilidad
+            Powered by BQuantStats • Métricas calculadas con precisión institucional
         </p>
     </div>
 """, unsafe_allow_html=True)
