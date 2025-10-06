@@ -266,8 +266,10 @@ with st.sidebar:
                 help="Archivo con columnas de fecha y retornos del benchmark"
             )
         
-        else:  # Ninguno
+        else:
             st.info("ℹ️ Análisis sin benchmark. Solo métricas de la estrategia.")
+        
+        st.markdown("---")
         
         rf_rate = st.number_input(
             "Tasa Libre de Riesgo (%)",
@@ -370,7 +372,6 @@ with st.sidebar:
         
         st.markdown("---")
         
-        # Quick presets
         st.markdown("### 🎯 Presets Rápidos")
         col1, col2 = st.columns(2)
         with col1:
@@ -388,7 +389,6 @@ with st.sidebar:
 
 # Main content
 if uploaded_file is None:
-    # Welcome screen with guide
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("""
@@ -400,7 +400,6 @@ if uploaded_file is None:
             </div>
         """, unsafe_allow_html=True)
         
-        # Guide
         st.markdown("---")
         st.markdown("### 📚 Guía de Uso Rápida")
         
@@ -442,18 +441,6 @@ if uploaded_file is None:
                     </ul>
                 </div>
             """, unsafe_allow_html=True)
-            
-            st.markdown("""
-                <div class='metric-card'>
-                    <h4 style='color: #00d4ff; margin-top: 0;'>🎯 Benchmarks Flexibles</h4>
-                    <ul style='color: #a0a0c0; line-height: 1.8;'>
-                        <li>Yahoo Finance (SPY, QQQ, etc.)</li>
-                        <li>Subir benchmark personalizado</li>
-                        <li>Control de rango de fechas</li>
-                        <li>Comparación detallada</li>
-                    </ul>
-                </div>
-            """, unsafe_allow_html=True)
         
         with col_b:
             st.markdown("""
@@ -470,12 +457,12 @@ if uploaded_file is None:
             
             st.markdown("""
                 <div class='metric-card'>
-                    <h4 style='color: #00d4ff; margin-top: 0;'>🚀 Exportación</h4>
+                    <h4 style='color: #00d4ff; margin-top: 0;'>🎯 Benchmarks Flexibles</h4>
                     <ul style='color: #a0a0c0; line-height: 1.8;'>
-                        <li>Reportes HTML completos</li>
-                        <li>Tablas CSV de métricas</li>
-                        <li>Tearsheets profesionales</li>
-                        <li>Simulaciones Monte Carlo</li>
+                        <li>Yahoo Finance (SPY, QQQ, etc.)</li>
+                        <li>Subir benchmark personalizado</li>
+                        <li>Control de rango de fechas</li>
+                        <li>Comparación detallada</li>
                     </ul>
                 </div>
             """, unsafe_allow_html=True)
@@ -530,29 +517,20 @@ else:
             
             with st.spinner(f"📥 Descargando {bench_name} desde Yahoo Finance..."):
                 try:
-                    # Download benchmark data
                     if start_date and end_date:
                         bench_data = yf.download(benchmark_option, start=start_date, end=end_date, progress=False, auto_adjust=True)
                     else:
-                        # Use strategy date range
                         bench_data = yf.download(benchmark_option, start=returns.index.min(), end=returns.index.max(), progress=False, auto_adjust=True)
                     
                     if not bench_data.empty and len(bench_data) > 0:
-                        # Calculate returns - yfinance with auto_adjust=True returns Close as adjusted
                         if 'Close' in bench_data.columns:
                             benchmark = bench_data['Close'].pct_change().dropna()
                         else:
-                            # Fallback if structure is different
                             benchmark = bench_data.iloc[:, 0].pct_change().dropna()
                         
-                        # Ensure benchmark is a Series
                         if isinstance(benchmark, pd.DataFrame):
                             benchmark = benchmark.iloc[:, 0]
                         
-                        # Show benchmark info
-                        col_info1, col_info2, col_info3 = st.columns(3)
-                        with col_info1:
-                            # Show benchmark info
                         col_info1, col_info2, col_info3 = st.columns(3)
                         with col_info1:
                             st.success(f"✅ {bench_name} descargado")
@@ -562,15 +540,12 @@ else:
                             bench_return = (1 + benchmark).prod() - 1
                             st.info(f"📈 Retorno: {bench_return*100:.2f}%")
                         
-                        # Show benchmark preview
                         with st.expander("📊 Vista Previa del Benchmark", expanded=False):
                             preview_df = pd.DataFrame({
                                 'Fecha': benchmark.index[-10:],
                                 'Retorno': [f"{r*100:.4f}%" for r in benchmark.values[-10:]]
                             })
                             st.dataframe(preview_df, use_container_width=True, hide_index=True)
-                        
-                        st.info(f"💡 Alineando fechas con tu estrategia para comparación precisa")
                     else:
                         st.error(f"❌ No se pudieron obtener datos de {bench_name}")
                         benchmark = None
@@ -589,7 +564,6 @@ else:
         
         elif benchmark_type == "CSV Personalizado" and benchmark_file:
             try:
-                # Read benchmark file
                 if benchmark_file.name.endswith('.csv'):
                     bench_df = pd.read_csv(benchmark_file)
                 else:
@@ -597,7 +571,6 @@ else:
                 
                 st.success(f"✅ Benchmark cargado: {benchmark_file.name}")
                 
-                # Show preview and column selection
                 with st.expander("📄 Vista Previa del Benchmark"):
                     st.dataframe(bench_df.head(), use_container_width=True)
                 
@@ -607,7 +580,6 @@ else:
                 with col_b2:
                     bench_ret_col = st.selectbox("Columna Retornos (Benchmark)", bench_df.columns, index=1 if len(bench_df.columns) > 1 else 0, key="bench_ret")
                 
-                # Process benchmark
                 bench_df[bench_date_col] = pd.to_datetime(bench_df[bench_date_col])
                 bench_df.set_index(bench_date_col, inplace=True)
                 benchmark = bench_df[bench_ret_col].dropna()
@@ -685,12 +657,10 @@ else:
             max_dd = qs.stats.max_drawdown(returns)
             calmar = qs.stats.calmar(returns, periods=periods_per_year)
             
-            # Calculate average drawdown manually
             cumulative = (1 + returns).cumprod()
             running_max = cumulative.cummax()
             drawdown = (cumulative - running_max) / running_max
             
-            # Get all drawdown periods
             is_drawdown = drawdown < 0
             dd_periods = []
             if is_drawdown.any():
@@ -768,15 +738,11 @@ else:
         # === CHARTS SECTION ===
         st.markdown("## 📈 Análisis Visual")
         
-        chart_cols = 2
-        
-        # Cumulative Returns
         if prefs['charts']['cumulative_returns']:
             with st.expander("📈 Retornos Acumulados", expanded=True):
                 fig = qs.plots.returns(returns, benchmark=benchmark, show=False, figsize=(14, 6))
                 st.pyplot(fig)
         
-        # Create 2-column layout for other charts
         charts_to_show = []
         
         if prefs['charts']['monthly_heatmap']:
@@ -800,10 +766,9 @@ else:
         if prefs['charts']['rolling_stats']:
             charts_to_show.append(('rolling_stats', "📊 Estadísticas Móviles"))
         
-        # Display charts in 2-column grid
-        for i in range(0, len(charts_to_show), chart_cols):
-            cols = st.columns(chart_cols)
-            for j in range(chart_cols):
+        for i in range(0, len(charts_to_show), 2):
+            cols = st.columns(2)
+            for j in range(2):
                 if i + j < len(charts_to_show):
                     chart_type, chart_title = charts_to_show[i + j]
                     with cols[j]:
@@ -835,15 +800,31 @@ else:
             st.markdown("---")
             st.markdown("## 🔬 Análisis Avanzado")
         
-        # Statistical Edge
         if prefs['advanced']['statistical_edge']:
             with st.expander("📊 Análisis de Ventaja Estadística", expanded=False):
                 col1, col2, col3 = st.columns(3)
                 
                 avg_win = qs.stats.avg_win(returns)
                 avg_loss = qs.stats.avg_loss(returns)
-                consecutive_wins = qs.stats.consecutive_wins(returns)
-                consecutive_losses = qs.stats.consecutive_losses(returns)
+                
+                returns_sign = np.sign(returns)
+                consecutive_wins = 0
+                consecutive_losses = 0
+                current_win_streak = 0
+                current_loss_streak = 0
+                
+                for r in returns_sign:
+                    if r > 0:
+                        current_win_streak += 1
+                        current_loss_streak = 0
+                        consecutive_wins = max(consecutive_wins, current_win_streak)
+                    elif r < 0:
+                        current_loss_streak += 1
+                        current_win_streak = 0
+                        consecutive_losses = max(consecutive_losses, current_loss_streak)
+                    else:
+                        current_win_streak = 0
+                        current_loss_streak = 0
                 
                 with col1:
                     st.metric("Ganancia Promedio", f"{avg_win*100:.2f}%")
@@ -861,7 +842,6 @@ else:
                     elif payoff > 2:
                         st.markdown("<div class='insight-box'><b>💡 Ventaja Asimétrica:</b> Ratio payoff fuerte sugiere características de seguimiento de tendencias.</div>", unsafe_allow_html=True)
         
-        # Time Analysis
         if prefs['advanced']['time_analysis']:
             with st.expander("🔄 Análisis Temporal", expanded=False):
                 monthly_rets = returns.resample('M').apply(lambda x: (1 + x).prod() - 1)
@@ -883,7 +863,6 @@ else:
                 fig = qs.plots.monthly_returns(returns, show=False, figsize=(14, 6))
                 st.pyplot(fig)
         
-        # Monte Carlo
         if prefs['advanced']['monte_carlo']:
             with st.expander("🎲 Simulación Monte Carlo", expanded=False):
                 col1, col2, col3 = st.columns(3)
@@ -978,8 +957,22 @@ else:
                     st.pyplot(fig)
     
     except Exception as e:
-        st.error(f"❌ Error: {str(e)}")
-        st.info("💡 Asegúrate de que tu archivo tenga columnas de fecha y retornos en formato decimal o porcentaje.")
+        st.error(f"❌ Error al procesar los datos")
+        with st.expander("🔍 Detalles del error", expanded=True):
+            st.code(str(e))
+            st.markdown("---")
+            st.markdown("### 💡 Posibles soluciones:")
+            st.markdown("""
+            1. **Formato del archivo**: Verifica que tu CSV tenga columnas de fecha y retornos
+            2. **Formato de retornos**: Deben estar en decimal (0.01) o porcentaje (1.0)
+            3. **Fechas**: Asegúrate que las fechas estén en formato reconocible (YYYY-MM-DD, DD/MM/YYYY, etc.)
+            4. **Datos faltantes**: Revisa que no haya filas vacías o valores nulos excesivos
+            5. **Encoding**: Si el archivo tiene caracteres especiales, guárdalo como UTF-8
+            """)
+            
+            if 'df' in locals() and df is not None:
+                st.markdown("### 📄 Vista previa de tus datos:")
+                st.dataframe(df.head(10), use_container_width=True)
 
 # Footer
 st.markdown("---")
